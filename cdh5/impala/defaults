@@ -1,0 +1,69 @@
+{% set ss_host = salt['mine.get']('G@stack_id:' ~ grains.stack_id ~ ' and G@roles:cdh5.impala.state-store', 'grains.items', 'compound').values()[0]['fqdn'] %}
+{% if pillar.cdh5.security.enable %}
+{% from 'krb5/settings.sls' import krb5 with context %}
+{% endif %}
+{% set kms = salt['mine.get']('G@stack_id:' ~ grains.stack_id ~ ' and G@roles:cdh5.hadoop.kms', 'grains.items', 'compound') %}
+IMPALA_CATALOG_SERVICE_HOST={{ss_host}}
+IMPALA_STATE_STORE_HOST={{ss_host}}
+IMPALA_STATE_STORE_PORT=24000
+IMPALA_BACKEND_PORT=22000
+IMPALA_LOG_DIR=/var/log/impala
+DEFAULT_POOL_MAX_REQUESTS={{ salt['pillar.get']('cdh5:impala:max_pool_requests', 20) }}
+DEFAULT_MEM_LIMIT={{ salt['pillar.get']('cdh5:impala:server_max_memory', '12GB') }}
+{% if pillar.cdh5.security.enable %}
+KRB5_CONFIG={{ pillar.krb5.conf_file }}
+{% endif %}
+
+IMPALA_CATALOG_ARGS=" \
+{%- if pillar.cdh5.security.enable %}
+    -kerberos_reinit_interval=60 \
+    -principal=impala/{{ grains.fqdn }}@{{ krb5.realm }} \
+    -keytab_file=/etc/impala/conf/impala.keytab \
+    -krb5_conf=${KRB5_CONFIG} \
+{%- endif %}
+    -use_statestore \
+    -state_store_host=${IMPALA_STATE_STORE_HOST} \
+    -state_store_port=${IMPALA_STATE_STORE_PORT} \
+    -log_dir=${IMPALA_LOG_DIR}"
+
+IMPALA_STATE_STORE_ARGS=" \
+{%- if pillar.cdh5.security.enable %}
+    -kerberos_reinit_interval=60 \
+    -principal=impala/{{ grains.fqdn }}@{{ krb5.realm }} \
+    -keytab_file=/etc/impala/conf/impala.keytab \
+    -krb5_conf=${KRB5_CONFIG} \
+{%- endif %}
+    -log_dir=${IMPALA_LOG_DIR} \
+    -state_store_port=${IMPALA_STATE_STORE_PORT}"
+
+IMPALA_SERVER_ARGS=" \
+{%- if pillar.cdh5.security.enable %}
+    -kerberos_reinit_interval=60 \
+    -principal=impala/{{ grains.fqdn }}@{{ krb5.realm }} \
+    -keytab_file=/etc/impala/conf/impala.keytab \
+    -krb5_conf=${KRB5_CONFIG} \
+{%- endif %}
+{%- if kms %}
+    -disk_spill_encryption=true \
+{%- endif %}
+    -log_dir=${IMPALA_LOG_DIR} \
+    -catalog_service_host=${IMPALA_CATALOG_SERVICE_HOST} \
+    -use_statestore \
+    -state_store_host=${IMPALA_STATE_STORE_HOST} \
+    -state_store_port=${IMPALA_STATE_STORE_PORT} \
+    -be_port=${IMPALA_BACKEND_PORT} \
+    -default_pool_max_requests=${DEFAULT_POOL_MAX_REQUESTS} \
+    -mem_limit=${DEFAULT_MEM_LIMIT}"
+
+ENABLE_CORE_DUMPS=false
+
+# LIBHDFS_OPTS=-Djava.library.path=/usr/lib/impala/lib
+# MYSQL_CONNECTOR_JAR=/usr/share/java/mysql-connector-java.jar
+# IMPALA_BIN=/usr/lib/impala/sbin
+# IMPALA_HOME=/usr/lib/impala
+# HIVE_HOME=/usr/lib/hive
+# HBASE_HOME=/usr/lib/hbase
+# IMPALA_CONF_DIR=/etc/impala/conf
+# HADOOP_CONF_DIR=/etc/impala/conf
+# HIVE_CONF_DIR=/etc/impala/conf
+# HBASE_CONF_DIR=/etc/impala/conf

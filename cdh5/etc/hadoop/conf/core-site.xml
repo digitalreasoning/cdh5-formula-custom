@@ -1,0 +1,185 @@
+{%- set standby_namenode = salt['mine.get']('G@stack_id:' ~ grains.stack_id ~ ' and G@roles:cdh5.hadoop.hdfs.standby-namenode', 'grains.items', 'compound') -%}
+{%- set kms = salt['mine.get']('G@stack_id:' ~ grains.stack_id ~ ' and G@roles:cdh5.hadoop.kms', 'grains.items', 'compound') -%}
+{%- set namenode_fqdn = salt['mine.get']('G@stack_id:' ~ grains.stack_id ~ ' and G@roles:cdh5.hadoop.hdfs.namenode', 'grains.items', 'compound').values()[0]['fqdn'] -%}
+{%- set zookeepers = salt['mine.get']('G@stack_id:' ~ grains.stack_id ~ ' and G@roles:cdh5.zookeeper', 'grains.items', 'compound').values() -%}
+{%- if kms -%}
+    {%- set kms_items = kms.values()[0] -%}
+    {%- set kms_fqdn = kms_items['fqdn'] -%}
+{%- endif -%}
+<?xml version="1.0"?>
+<configuration>
+    <property>
+        <name>hadoop.tmp.dir</name>
+        <value>/tmp/hadoop/${user.name}</value>
+    </property>
+    <property>
+        <name>io.file.buffer.size</name>
+        <value>65536</value>
+    </property>
+    <property>
+        <name>io.compression.codecs</name>
+        <value>org.apache.hadoop.io.compress.DefaultCodec,org.apache.hadoop.io.compress.GzipCodec,org.apache.hadoop.io.compress.SnappyCodec</value>
+    </property>
+    {%- if standby_namenode %}
+    <!-- Use the uri with the nameservice if we're in HA mode-->
+    <property>
+        <name>fs.defaultFS</name>
+        <value>hdfs://{{ grains.namespace }}</value>
+    </property>
+    <!-- set up the zookeeper quorum -->
+    <property>
+        <name>ha.zookeeper.quorum</name>
+        <value>{% for zk in zookeepers %}{{ zk['fqdn'] }}{% if not loop.last %},{% endif %}{% endfor %}</value>
+    </property>
+    {%- else %}
+    <!-- Otherwise just use the nn fqdn + port -->
+    <property>
+        <name>fs.defaultFS</name>
+        <value>hdfs://{{ namenode_fqdn }}:8020/</value>
+    </property>
+    {%- endif %}
+    <property>
+        <name>fs.trash.interval</name>
+        <value>1440</value>
+        <final>true</final>
+    </property>
+    <property>
+        <name>hadoop.rpc.socket.factory.class.default</name>
+        <value>org.apache.hadoop.net.StandardSocketFactory</value>
+        <final>true</final>
+    </property>
+    <property>
+        <name>hadoop.rpc.socket.factory.class.ClientProtocol</name>
+        <value></value>
+        <final>true</final>
+    </property>
+    <property>
+        <name>hadoop.proxyuser.oozie.hosts</name>
+        <value>*</value>
+    </property>
+    <property>
+        <name>hadoop.proxyuser.oozie.groups</name>
+        <value>*</value>
+    </property>
+    <!-- Hue WebHDFS proxy user setting -->
+    <property>
+        <name>hadoop.proxyuser.hue.hosts</name>
+        <value>*</value>
+    </property>
+    <property>
+        <name>hadoop.proxyuser.hue.groups</name>
+        <value>*</value>
+    </property>
+    <property>
+        <name>hadoop.proxyuser.mapred.hosts</name>
+        <value>*</value>
+    </property>
+    <property>
+        <name>hadoop.proxyuser.mapred.groups</name>
+        <value>*</value>
+    </property>
+    <property>
+        <name>hadoop.proxyuser.hive.hosts</name>
+        <value>*</value>
+    </property>
+    <property>
+        <name>hadoop.proxyuser.hive.groups</name>
+        <value>*</value>
+    </property>
+    <property>
+        <name>dfs.client.read.shortcircuit</name>
+        <value>true</value>
+    </property>
+
+    <!-- Rack-awareness properties -->
+    {% if pillar.cdh5.spot_or_not_rack %}
+    <property>
+        <name>net.topology.node.switch.mapping.impl</name>
+        <value>org.apache.hadoop.net.ScriptBasedMapping</value>
+    </property>
+    <property>
+        <name>net.topology.script.file.name</name>
+        <value>/etc/hadoop/conf/set_rack.py</value>
+    </property>
+    {% else %}
+    <property>
+        <name>net.topology.node.switch.mapping.impl</name>
+        <value>org.apache.hadoop.net.TableMapping</value>
+    </property>
+    <property>
+        <name>net.topology.table.file.name</name>
+        {% if pillar.cdh5.rack_by_component %}
+        <value>/etc/hadoop/conf/rack-by-comp.map</value>
+        {% else %}
+        <value>/etc/hadoop/conf/host-rack.map</value>
+        {% endif %}
+    </property>
+    {% endif %}
+
+    {% if pillar.cdh5.security.enable %}
+    {% from 'krb5/settings.sls' import krb5 with context %}
+    <property>
+        <name>hadoop.security.authentication</name>
+        <value>kerberos</value>
+    </property>
+    <property>
+        <name>hadoop.security.authorization</name>
+        <value>true</value>
+    </property>
+    <property>
+        <name>hue.kerberos.principal.shortname</name>
+        <value>hue</value>
+    </property>
+    {% endif %}
+
+    {% if kms %}
+    <property>
+        <name>hadoop.security.key.provider.path</name>
+        <value>kms://http{% if pillar.cdh5.encryption.enable %}s{% endif %}@{{ kms_fqdn }}:16000/kms</value>
+    </property>
+    {% endif %}
+
+    {% if pillar.cdh5.encryption.enable %}
+    <property>
+        <name>hadoop.rpc.protection</name>
+        <value>privacy</value>
+    </property>
+    <property>
+        <name>hadoop.ssl.enabled</name>
+        <value>true</value>
+    </property>
+    <property>
+        <name>hadoop.ssl.require.client.cert</name>
+        <value>false</value>
+        <final>true</final>
+    </property>
+    <property>
+        <name>hadoop.ssl.hostname.verifier</name>
+        <value>DEFAULT</value>
+        <final>true</final>
+    </property>
+    <property>
+        <name>hadoop.ssl.keystores.factory.class</name>
+        <value>org.apache.hadoop.security.ssl.FileBasedKeyStoresFactory</value>
+        <final>true</final>
+    </property>
+    <property>
+        <name>hadoop.ssl.server.conf</name>
+        <value>ssl-server.xml</value>
+        <final>true</final>
+    </property>
+    <property>
+        <name>hadoop.ssl.client.conf</name>
+        <value>ssl-client.xml</value>
+        <final>true</final>
+    </property>
+    {% endif %}
+
+    <!-- Additional formula properties -->
+    {% for k, v in pillar.cdh5.extra_properties.core.items() %}
+    <property>
+        <name>{{ k }}</name>
+        <value>{{ v }}</value>
+    </property>
+    {% endfor %}
+</configuration>

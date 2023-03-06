@@ -1,0 +1,193 @@
+title: CDH5 Salt Formula
+description: Salt formula for installing components of CDH5
+root_path: cdh5
+components:
+  - title: Hadoop Client Node
+    description: Hadoop Client Node
+    sls_path: cdh5.hadoop.client
+  - title: HDFS JournalNode
+    description: Hadoop HDFS JournalNode component of CDH5
+    sls_path: cdh5.hadoop.hdfs.journalnode
+  - title: HDFS NameNode
+    description: Hadoop HDFS NameNode component of CDH5
+    sls_path: cdh5.hadoop.hdfs.namenode
+  - title: HDFS Standby NameNode
+    description: Hadoop HDFS NameNode component of CDH5
+    sls_path: cdh5.hadoop.hdfs.standby-namenode
+  - title: HDFS DataNode
+    description: Hadoop HDFS DataNode component of CDH5
+    sls_path: cdh5.hadoop.hdfs.datanode
+  - title: YARN ResourceManager
+    description: YARN ResourceManager component of CDH5
+    sls_path: cdh5.hadoop.yarn.resourcemanager
+  - title: YARN Standby ResourceManager
+    description: YARN Standby ResourceManager component of CDH5
+    sls_path: cdh5.hadoop.yarn.standby-resourcemanager
+  - title: YARN NodeManager
+    description: YARN NodeManager component of CDH5
+    sls_path: cdh5.hadoop.yarn.nodemanager
+  - title: MapReduce History Server
+    description: MapReduce History Server component of CDH5
+    sls_path: cdh5.hadoop.mapreduce.historyserver
+  - title: Rack1
+    description: rack1 component
+    sls_path: cdh5.hadoop.rack.rack1
+  - title: Rack2
+    description: rack2 component
+    sls_path: cdh5.hadoop.rack.rack2
+  - title: Key Management Server
+    description: Key Management Server for HDFS encryption-at-rest
+    sls_path: cdh5.hadoop.kms
+  - title: ZooKeeper
+    description: ZooKeeper component of CDH5
+    sls_path: cdh5.zookeeper
+  - title: HBase Master
+    description: HBase Master component of CDH5
+    sls_path: cdh5.hbase.master
+  - title: HBase RegionServer
+    description: HBase RegionServer component of CDH5
+    sls_path: cdh5.hbase.regionserver
+  - title: HBase Secure Permissions
+    description: Separate state because it needs to run on the master AFTER the regionservers are started.  Used only when security is enabled.
+    sls_path: cdh5.hbase.security.permissions
+  - title: HBase Client
+    description: HBase Client Node
+    sls_path: cdh5.hbase.client
+  - title: Oozie
+    description: Oozie
+    sls_path: cdh5.oozie
+  - title: Oozie Client Node
+    description: Oozie Client Node
+    sls_path: cdh5.oozie.client
+  - title: Spark History Server
+    description: Spark History Server
+    sls_path: cdh5.spark.historyserver
+  - title: Spark Client
+    description: Spark Client
+    sls_path: cdh5.spark.client
+  - title: Hue
+    description: Hue
+    sls_path: cdh5.hue
+  - title: Pig
+    description: Pig
+    sls_path: cdh5.pig
+  - title: Hive
+    description: Hive
+    sls_path: cdh5.hive
+  - title: Sqoop
+    description: Sqoop
+    sls_path: cdh5.sqoop
+  - title: Impala State Store
+    description: Impala State Store
+    sls_path: cdh5.impala.state-store
+  - title: Impala Server
+    description: Impala Server
+    sls_path: cdh5.impala.server
+  - title: Cloudera Manager Server
+    description: Cloudera Manager Server
+    sls_path: cdh5.manager.server
+  - title: Cloudera Manager Agent
+    description: Cloudera Manager Agent
+    sls_path: cdh5.manager.agent
+  - title: Sentry
+    description: Sentry
+    sls_path: cdh5.sentry
+
+pillar_defaults:
+  cdh5:
+    version: 5
+    landing_page: true
+    max_log_index: 1
+    spot_or_not_rack: false
+    rack_by_component: false
+    encryption:
+      enable: false
+      ca_cert: CHANGE_ME
+      ca_key: CHANGE_ME
+      ca_key_pass: CHANGE_ME
+    security:
+      enable: false
+    namenode:
+      start_service: true
+    datanode:
+      start_service: true
+    nodemanager:
+      start_service: true
+    journalnode:
+      start_service: true
+    yarn:
+      max_container_size_mb: 11264
+      num_cpus: 8
+      local_dirs: /mnt/hadoop/yarn/local
+      log_dirs: /mnt/hadoop/yarn/logs
+      log_retain_seconds: -1
+      max_completed_applications: 5000
+      scheduler: fair
+    io:
+      sort_factor: 64
+      sort_mb: 256
+    dfs:
+      name_dir: /mnt/hadoop/hdfs/nn
+      checkpoint_dir: /mnt/hadoop/hdfs/snn
+      data_dir: /mnt/hadoop/hdfs/dn
+      journal_dir: /mnt/hadoop/hdfs/jn
+      du_reserved: 5368709120  # 5GB
+      permissions: true
+      block_size: 268435456
+      replication: 3
+      namenode_opts: ''
+      datanode_opts: ''
+    mapred:
+      system_dir: /hadoop/system/mapred
+      memory_mb: 2048
+      reduces: 3
+      heap_dump_path: /mnt
+      metainfo_maxsplit: 10000000
+    hbase:
+      start_service: true
+      tmp_dir: /mnt/hbase/tmp
+      log_dir: /mnt/hbase/logs
+      master_max_heap: 1000m
+      region_max_heap: 1000m
+      jute_maxbuffer: 10485750
+    zookeeper:
+      data_dir: /mnt/zk/data
+      start_service: true
+    oozie:
+      start_service: true
+      max_log_index: 168  # 1 week
+    spark:
+      start_service: true
+    impala:
+      start_service: true
+      max_pool_requests: 1000
+      server_max_memory: 12G
+    hive:
+      start_service: true
+      user: hive
+      home: /usr/lib/hive
+      metastore_password: CHANGE_THIS
+    hue:
+      start_service: true
+      secret_key: CHANGE_THIS
+    sqoop:
+      start_service: true
+      user: sqoop
+      db_password: 1234
+    manager:
+      version: 5
+      cloudera_user: 3bcf58ca-92d0-453c-9a48-71309127e628
+      cloudera_password: ac52326a5fff
+      server:
+        start_service: true
+      agent:
+        start_service: true
+        parcel_dir: /mnt/cloudera/parcels
+        log_file: /mnt/log/cloudera-scm-agent/cloudera-scm-agent.log
+    sentry:
+      start_service: true
+    extra_properties:
+      core: {}
+      hdfs: {}
+      mapred: {}
+      yarn: {}

@@ -1,0 +1,2 @@
+{%- set zkquorum = salt['mine.get']('G@stack_id:' ~ grains.stack_id ~ ' and G@roles:cdh5.zookeeper', 'grains.items', 'compound').items() -%}
+{% for host, items in zkquorum %}{% if items['fqdn'] == grains.get('fqdn') %}{{ loop.index0 }}{% endif %}{% endfor %}

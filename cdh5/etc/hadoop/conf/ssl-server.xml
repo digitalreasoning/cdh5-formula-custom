@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+    <property>
+        <name>ssl.server.keystore.location</name>
+        <value>/etc/hadoop/conf/hadoop.keystore</value>
+    </property>
+    <property>
+        <name>ssl.server.keystore.password</name>
+        <value>hadoop</value>
+    </property>
+    <property>
+        <name>ssl.server.keystore.keypassword</name>
+        <value>hadoop</value>
+    </property>
+    <property>
+        <name>ssl.server.keystore.type</name>
+        <value>jks</value>
+    </property>
+</configuration>

@@ -1,0 +1,269 @@
+{%- set standby_namenode = salt['mine.get']('G@stack_id:' ~ grains.stack_id ~ ' and G@roles:cdh5.hadoop.hdfs.standby-namenode', 'grains.items', 'compound') -%}
+{%- set kms = salt['mine.get']('G@stack_id:' ~ grains.stack_id ~ ' and G@roles:cdh5.hadoop.kms', 'grains.items', 'compound') -%}
+{%- set namenode_fqdn = salt['mine.get']('G@stack_id:' ~ grains.stack_id ~ ' and G@roles:cdh5.hadoop.hdfs.namenode', 'grains.items', 'compound').values()[0]['fqdn'] -%}
+{%- if standby_namenode -%}
+    {%- set standby_items = standby_namenode.values()[0] -%}
+    {%- set standby_fqdn = standby_items['fqdn'] -%}
+    {%- set journal_nodes = salt['mine.get']('G@stack_id:' ~ grains.stack_id ~ ' and G@roles:cdh5.hadoop.hdfs.journalnode', 'grains.items', 'compound').values() -%}
+{%- endif -%}
+{%- if kms -%}
+    {%- set kms_items = kms.values()[0] -%}
+    {%- set kms_fqdn = kms_items['fqdn'] -%}
+{%- endif -%}
+<?xml version="1.0"?>
+<configuration>
+    <property>
+        <name>dfs.namenode.name.dir</name>
+        <value>{{ pillar.cdh5.dfs.name_dir }}</value>
+    </property>
+    <property>
+        <name>dfs.namenode.checkpoint.dir</name>
+        <value>{{ pillar.cdh5.dfs.checkpoint_dir }}</value>
+    </property>
+    <property>
+        <name>dfs.datanode.data.dir</name>
+        <value>{{ pillar.cdh5.dfs.data_dir }}</value>
+    </property>
+    <!-- Leave a certain number of bytes of the disk space open -->
+    <property>
+        <name>dfs.datanode.du.reserved</name>
+        <value>{{ pillar.cdh5.dfs.du_reserved }}</value>
+    </property>
+    <property>
+        <name>dfs.permissions.superusergroup</name>
+        <value>hadoop</value>
+    </property>
+    <property>
+        <name>dfs.datanode.max.transfer.threads</name>
+        <value>8192</value>
+    </property>
+    <property>
+        <name>ipc.maximum.data.length</name>
+        <value>134217728</value>
+    </property>
+
+    <property>
+        <name>dfs.permissions</name>
+        <value>{{ pillar.cdh5.dfs.permissions }}</value>
+        <final>true</final>
+    </property>
+    <property>
+        <name>dfs.replication</name>
+        <value>{{ pillar.cdh5.dfs.replication }}</value>
+    </property>
+    <property>
+        <name>dfs.blocksize</name>
+        <value>{{ pillar.cdh5.dfs.block_size }}</value>
+    </property>
+    <property>
+        <name>dfs.webhdfs.enabled</name>
+        <value>true</value>
+    </property>
+
+    <!-- Hive configuration -->
+    <property>
+        <name>dfs.client.read.shortcircuit</name>
+        <value>true</value>
+    </property>
+    <property>
+        <name>dfs.domain.socket.path</name>
+        <value>/var/run/hadoop-hdfs/dn._PORT</value>
+    </property>
+    <property>
+        <name>dfs.client.file-block-storage-locations.timeout.millis</name>
+        <value>10000</value>
+    </property>
+    <property>
+        <name>dfs.datanode.hdfs-blocks-metadata.enabled</name>
+        <value>true</value>
+    </property>
+
+    <property>
+        <name>dfs.client.use.legacy.blockreader.local</name>
+        <value>false</value>
+    </property>
+
+    <property>
+        <name>dfs.datanode.data.dir.perm</name>
+        <value>750</value>
+    </property>
+
+    <property>
+        <name>dfs.block.local-path-access.user</name>
+        <value>impala</value>
+    </property>
+
+    <property>
+        <name>dfs.client.file-block-storage-locations.timeout</name>
+        <value>10000</value>
+    </property>
+    <property>
+        <name>dfs.datanode.hdfs-blocks-metadata.enabled</name>
+        <value>true</value>
+    </property>
+
+    {% if standby_namenode %}
+    <property>
+        <name>dfs.nameservices</name>
+        <value>{{ grains.namespace }}</value>
+    </property>
+    <property>
+        <name>dfs.ha.automatic-failover.enabled</name>
+        <value>true</value>
+    </property>
+    <property>
+        <name>dfs.ha.namenodes.{{ grains.namespace }}</name>
+        <value>nn1,nn2</value>
+    </property>
+    <property>
+        <name>dfs.namenode.rpc-address.{{ grains.namespace }}.nn1</name>
+        <value>{{ namenode_fqdn }}:8020</value>
+    </property>
+    <property>
+        <name>dfs.namenode.rpc-address.{{ grains.namespace }}.nn2</name>
+        <value>{{ standby_fqdn }}:8020</value>
+    </property>
+    <property>
+        <name>dfs.namenode.http-address.{{ grains.namespace }}.nn1</name>
+        <value>{{ namenode_fqdn }}:50070</value>
+    </property>
+    <property>
+        <name>dfs.namenode.http-address.{{ grains.namespace }}.nn2</name>
+        <value>{{ standby_fqdn }}:50070</value>
+    </property>
+    <property>
+        <name>dfs.namenode.shared.edits.dir</name>
+        <value>qjournal://{% for j in journal_nodes %}{{ j['fqdn'] }}:8485{% if not loop.last %};{% endif %}{% endfor %}/{{ grains.namespace }}</value>
+    </property>
+    <property>
+        <name>dfs.journalnode.edits.dir</name>
+        <value>{{ pillar.cdh5.dfs.journal_dir }}</value>
+    </property>
+    <property>
+        <name>dfs.client.failover.proxy.provider.{{ grains.namespace }}</name>
+        <value>org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider</value>
+    </property>
+    <property>
+        <name>dfs.ha.fencing.methods</name>
+        <value>shell(/bin/true)</value>
+    </property>
+    {% else %}
+    <property>
+        <name>dfs.namenode.http-address</name>
+        <value>{{ namenode_fqdn }}:50070</value>
+    </property>
+    {% endif %}
+
+    {% if pillar.cdh5.security.enable %}
+    {% from 'krb5/settings.sls' import krb5 with context %}
+    <!-- General HDFS security config -->
+    <property>
+        <name>dfs.block.access.token.enable</name>
+        <value>true</value>
+    </property>
+
+    <!-- NameNode security config -->
+    <property>
+        <name>dfs.namenode.keytab.file</name>
+        <value>/etc/hadoop/conf/hdfs.keytab</value> <!-- path to the HDFS keytab -->
+    </property>
+    <property>
+        <name>dfs.namenode.kerberos.principal</name>
+        <value>hdfs/_HOST@{{ krb5.realm }}</value>
+    </property>
+    <property>
+        <name>dfs.namenode.kerberos.internal.spnego.principal</name>
+        <value>HTTP/_HOST@{{ krb5.realm }}</value>
+    </property>
+
+    <!-- Secondary NameNode security config -->
+    <property>
+        <name>dfs.secondary.namenode.keytab.file</name>
+        <value>/etc/hadoop/conf/hdfs.keytab</value> <!-- path to the HDFS keytab -->
+    </property>
+    <property>
+        <name>dfs.secondary.namenode.kerberos.principal</name>
+        <value>hdfs/_HOST@{{ krb5.realm }}</value>
+    </property>
+    <property>
+        <name>dfs.secondary.namenode.kerberos.internal.spnego.principal</name>
+        <value>HTTP/_HOST@{{ krb5.realm }}</value>
+    </property>
+
+    <!-- DataNode security config -->
+    <property>
+        <name>dfs.datanode.address</name>
+        <value>0.0.0.0:1004</value>
+    </property>
+    <property>
+        <name>dfs.datanode.http.address</name>
+        <value>0.0.0.0:1006</value>
+    </property>
+    <property>
+        <name>dfs.datanode.keytab.file</name>
+        <value>/etc/hadoop/conf/hdfs.keytab</value> <!-- path to the HDFS keytab -->
+    </property>
+    <property>
+        <name>dfs.datanode.kerberos.principal</name>
+        <value>hdfs/_HOST@{{ krb5.realm }}</value>
+    </property>
+
+    <!-- Web Authentication config -->
+    <property>
+        <name>dfs.web.authentication.kerberos.principal</name>
+        <value>HTTP/_HOST@{{ krb5.realm }}</value>
+    </property>
+
+    <!-- High-availability security config -->
+    <property>
+        <name>dfs.journalnode.keytab.file</name>
+        <value>/etc/hadoop/conf/hdfs.keytab</value>
+    </property>
+    <property>
+        <name>dfs.journalnode.kerberos.principal</name>
+        <value>hdfs/_HOST@{{ krb5.realm }}</value>
+    </property>
+    <property>
+        <name>dfs.journalnode.kerberos.internal.spnego.principal</name>
+        <value>HTTP/_HOST@{{ krb5.realm }}</value>
+    </property>
+    {% endif %}
+
+    {% if kms %}
+    <property>
+        <name>dfs.encryption.key.provider.uri</name>
+        <value>kms://http{% if pillar.cdh5.encryption.enable %}s{% endif %}@{{ kms_fqdn }}:16000/kms</value>
+    </property>
+    {% endif %}
+
+    {% if pillar.cdh5.encryption.enable %}
+    <property>
+        <name>dfs.encrypt.data.transfer</name>
+        <value>true</value>
+    </property>
+    <property>
+        <name>dfs.encrypt.data.transfer.algorithm</name>
+        <value>3des</value>
+    </property>
+    <property>
+        <name>dfs.encrypt.data.transfer.cipher.suites</name>
+        <value>AES/CTR/NoPadding</value>
+    </property>
+    <property>
+        <name>dfs.http.policy</name>
+        <value>HTTPS_ONLY</value>
+    </property>
+    <property>
+        <name>dfs.https.enable</name>
+        <value>true</value>
+    </property>
+    {% endif %}
+
+    <!-- Additional formula properties -->
+    {% for k, v in pillar.cdh5.extra_properties.hdfs.items() %}
+    <property>
+        <name>{{ k }}</name>
+        <value>{{ v }}</value>
+    </property>
+    {% endfor %}
+</configuration>
